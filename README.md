@@ -4,6 +4,18 @@ A local MCP server for FRITZ!Box routers. It uses
 [`fritzconnection`](https://github.com/kbr/fritzconnection) for TR-064 and
 optionally Playwright for general browser interaction with the router UI.
 
+## Launch announcement
+
+Just published [fritzbox-mcp](https://github.com/maxmeis/fritzbox-mcp): FRITZ!Box
+tools for your AI assistant.
+
+Discover and rename devices, control Wi-Fi and device internet access, and
+inspect DNS settings—all through MCP, using TR-064 and a browser fallback for
+advanced settings.
+
+63 tests passing. Public source. Early release, with full UI coverage still in
+progress.
+
 ## Capabilities and limits
 
 - Discover advertised TR-064 services, actions, and argument types.
