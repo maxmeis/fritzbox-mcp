@@ -116,17 +116,97 @@ PY
 cp mcp.json.example mcp.json
 ```
 
-5. **Connect your MCP client.** Add the `fritzbox` server entry from `mcp.json`
-   to the client's MCP configuration, following that client's documentation,
-   then restart or reload the client. The server uses stdio: it waits for MCP
-   messages on standard input and output, so a process that appears to wait
-   when launched by itself is expected. Keep standard output reserved for MCP
-   communication.
+5. **Connect your MCP client.** Follow the instructions for [Claude
+   Desktop](#claude-desktop), [Claude Code](#claude-code), or [Codex](#codex).
+   The server uses stdio: it waits for MCP messages on standard input and
+   output, so a process that appears to wait when launched by itself is
+   expected. Keep standard output reserved for MCP communication.
 
 6. **Check access with read-only tools first.** Ask the client to call
    `router_info`, `list_devices`, and `get_wan_dns`. These verify router
    authentication, device discovery, and DNS reads without changing settings.
    Review any later request that may change router configuration.
+
+### Claude Desktop
+
+In Claude Desktop, open **Settings > Developer > Edit Config**. In the JSON
+file that opens, merge the `fritzbox` entry from your configured `mcp.json`
+into its existing `mcpServers` object; keep any other server entries. The
+example is [mcp.json.example](mcp.json.example). Replace all path and username
+placeholders first. Fully quit Claude Desktop and reopen it. In the chat
+composer, open **Connectors > Manage connectors**, then select `fritzbox`
+to inspect its tools. See the [MCP
+guide for Claude Desktop](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
+for more detail.
+
+The config file is `~/Library/Application Support/Claude/claude_desktop_config.json`
+on macOS and `%APPDATA%\Claude\claude_desktop_config.json` on Windows.
+
+### Claude Code
+
+In a terminal, add the server for all your Claude Code projects. Replace each
+absolute path and the example username with the values from your configured
+`mcp.json`:
+
+```sh
+claude mcp add --transport stdio --scope user fritzbox \
+  --env FRITZ_HOST=fritz.box \
+  --env "FRITZ_USERNAME=your-fritzbox-username" \
+  --env "FRITZ_PASSWORD_FILE=/absolute/path/to/private/password" \
+  --env FRITZ_UI_URL=https://fritz.box \
+  --env "PLAYWRIGHT_BROWSERS_PATH=/absolute/path/to/fritzbox-mcp/.browsers" \
+  -- \
+  "/absolute/path/to/uv" run --frozen \
+  --directory "/absolute/path/to/fritzbox-mcp" \
+  --no-dev --extra ui fritzbox-mcp
+```
+
+Run `/mcp` inside Claude Code to see the connection and tools. The [Claude
+Code MCP guide](https://code.claude.com/docs/en/mcp) documents other
+installation scopes and commands.
+
+### Codex
+
+Codex CLI and the IDE extension use `~/.codex/config.toml` for MCP settings.
+Add the server from a terminal, replacing the example username and absolute
+paths with your values:
+
+```sh
+codex mcp add fritzbox \
+  --env FRITZ_HOST=fritz.box \
+  --env "FRITZ_USERNAME=your-fritzbox-username" \
+  --env "FRITZ_PASSWORD_FILE=/absolute/path/to/private/password" \
+  --env FRITZ_UI_URL=https://fritz.box \
+  --env "PLAYWRIGHT_BROWSERS_PATH=/absolute/path/to/fritzbox-mcp/.browsers" \
+  -- "/absolute/path/to/uv" run --frozen \
+  --directory "/absolute/path/to/fritzbox-mcp" \
+  --no-dev --extra ui fritzbox-mcp
+```
+
+Run `codex mcp list` to verify it was added, then start or restart a Codex
+session and use `/mcp` to check the connection. Alternatively, add the server
+to `~/.codex/config.toml` using the `mcp_servers.fritzbox` table and its
+`mcp_servers.fritzbox.env` table. For example, merge this into that file:
+
+```toml
+[mcp_servers.fritzbox]
+command = "/absolute/path/to/uv"
+args = ["run", "--frozen", "--directory", "/absolute/path/to/fritzbox-mcp", "--no-dev", "--extra", "ui", "fritzbox-mcp"]
+
+[mcp_servers.fritzbox.env]
+FRITZ_HOST = "fritz.box"
+FRITZ_USERNAME = "your-fritzbox-username"
+FRITZ_PASSWORD_FILE = "/absolute/path/to/private/password"
+FRITZ_UI_URL = "https://fritz.box"
+PLAYWRIGHT_BROWSERS_PATH = "/absolute/path/to/fritzbox-mcp/.browsers"
+```
+
+Use the CLI command or the TOML example, not both. See the [Codex MCP
+guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) for configuration
+details.
+
+Once connected in either client, try: **Use fritzbox to show router information,
+list devices, and read WAN DNS servers without changing any settings.**
 
 For UI tools, Chromium must be installed in the project `.browsers` directory
 and the MCP environment must use that same absolute path. The project-local
