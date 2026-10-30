@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fritzbox-mcp"
+version = "0.1.0"
+description = "Local MCP tools for a FRITZ!Box"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.26,<2", "fritzconnection>=1.15.1,<2"]
+
+[project.optional-dependencies]
+ui = ["playwright>=1.50,<2"]
+
+[project.scripts]
+fritzbox-mcp = "fritzbox_mcp.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.9,<1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fritzbox_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
