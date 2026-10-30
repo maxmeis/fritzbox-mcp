@@ -43,22 +43,95 @@ and UI layout.
 
 ## Requirements and setup
 
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/). Clone the public
-repository and install the optional browser dependencies:
+Follow these steps on macOS or Linux. The server runs on Python 3.11 or newer;
+the commands below use Python 3.12 managed by [uv](https://docs.astral.sh/uv/).
+You will also need Git and a computer that can reach the FRITZ!Box on the local
+network or over VPN.
+
+1. **Enable TR-064 and choose an account.** In the FRITZ!Box interface, enable
+   **Allow access for applications** in the home network settings. Create or
+   choose a FRITZ!Box user with **FRITZ!Box settings** permissions. Menu names
+   and locations vary between firmware versions. Use only the permissions you
+   need; some server tools can make changes.
+
+2. **Clone the project and install its runtime.** Install uv using its
+   [official installation guide](https://docs.astral.sh/uv/getting-started/installation/),
+   then run:
 
 ```sh
 git clone https://github.com/maxmeis/fritzbox-mcp.git
 cd fritzbox-mcp
-uv sync --frozen --extra ui --group dev
-PLAYWRIGHT_BROWSERS_PATH="$PWD/.browsers" uv run --extra ui playwright install chromium
+uv python install 3.12
+uv sync --python 3.12 --frozen --extra ui --no-dev
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.browsers" uv run --no-dev --extra ui playwright install chromium
 ```
 
-For API tools only, omit `--extra ui` and the Chromium installation.
+This installs the MCP server and browser tools without developer dependencies.
+On Linux, if Chromium reports missing system libraries, install them with
+`PLAYWRIGHT_BROWSERS_PATH="$PWD/.browsers" uv run --no-dev --extra ui playwright install --with-deps chromium`.
+Playwright's [browser installation guide](https://playwright.dev/python/docs/browsers)
+describes supported OS packages; `--with-deps` may require administrator access.
+For API tools only, omit `--extra ui` from every setup command and remove both
+`"--extra"` and `"ui"` from the client configuration's `args`. Skip Chromium
+installation and omit `PLAYWRIGHT_BROWSERS_PATH` from the client environment.
 
-In the router, enable **Allow access for applications** under the home network
-settings and use a FRITZ!Box account with the permissions you need. The
-computer running the server must be able to reach the router on its local
-network or VPN.
+3. **Create a private password file.** This prompts without displaying the
+   password, creates the file only if it does not already exist, and sets
+   owner-only permissions on macOS/Linux. Run it from the project directory:
+
+```sh
+uv run --no-dev --frozen --extra ui python - <<'PY'
+from getpass import getpass
+import os
+from pathlib import Path
+
+directory = Path.home() / ".config" / "fritzbox-mcp"
+directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+os.chmod(directory, 0o700)
+path = directory / "password"
+password = getpass("FRITZ!Box password: ")
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8") as password_file:
+    password_file.write(password)
+print(f"Created {path}")
+PY
+```
+
+   Keep the printed path for the client configuration. If the script says the
+   file already exists, it leaves it untouched; choose a different path or
+   handle that file deliberately. Do not put the password in a command, config
+   file, or shell history.
+
+4. **Set router and client paths.** Copy `mcp.json.example` to `mcp.json`, which
+   is ignored by git, then replace every `/absolute/path/...` placeholder with
+   an absolute path on your computer. For example, `pwd` prints the project
+   path, `command -v uv` prints the uv executable path, and the password script
+   printed its file path. The browser path is the project path followed by
+   `/.browsers`. Set `FRITZ_HOST` to `fritz.box` or the router's IP address,
+   `FRITZ_USERNAME` to your FRITZ!Box account name, and `FRITZ_UI_URL` to the
+   router UI origin on the same host (for example `https://fritz.box`). If
+   using an IP or custom port, make `FRITZ_UI_URL` match that host and port.
+
+```sh
+cp mcp.json.example mcp.json
+```
+
+5. **Connect your MCP client.** Add the `fritzbox` server entry from `mcp.json`
+   to the client's MCP configuration, following that client's documentation,
+   then restart or reload the client. The server uses stdio: it waits for MCP
+   messages on standard input and output, so a process that appears to wait
+   when launched by itself is expected. Keep standard output reserved for MCP
+   communication.
+
+6. **Check access with read-only tools first.** Ask the client to call
+   `router_info`, `list_devices`, and `get_wan_dns`. These verify router
+   authentication, device discovery, and DNS reads without changing settings.
+   Review any later request that may change router configuration.
+
+For UI tools, Chromium must be installed in the project `.browsers` directory
+and the MCP environment must use that same absolute path. The project-local
+browser installation keeps this setup independent of Playwright's default
+browser cache.
 
 The server reads configuration from its process environment:
 
@@ -73,31 +146,39 @@ The server reads configuration from its process environment:
 | `FRITZ_UI_URL` | `https://` + host | Web UI origin, including a custom port if needed |
 | `PLAYWRIGHT_BROWSERS_PATH` | Playwright default | Browser path; use the absolute `.browsers` path from the install command for UI tools |
 
-Keep a password file private (for example, `chmod 600 /path/to/password`). The
-server does not automatically load `.env`; configure variables in the MCP
-client or export them before launching it.
-
-## Connect an MCP client
-
-Copy `mcp.json.example` to `mcp.json` and edit the absolute paths for your
-checkout and private password file. The example uses `uv` from `PATH`; if your
-MCP client has a restricted `PATH`, set `command` to the absolute path of your
-`uv` executable. The local `mcp.json` is ignored by git because it can contain
-private paths or credentials. Add its server entry to your client's MCP
-configuration if the client does not read this file directly.
-
-The command starts a stdio MCP process and waits for an MCP client. You can
-check the command without starting a session:
+The server does not automatically load `.env`; configure variables in the MCP
+client or export them before launching it. You can check the CLI without
+starting an MCP session:
 
 ```sh
-uv run --frozen --extra ui fritzbox-mcp --help
+uv run --no-dev --frozen --extra ui fritzbox-mcp --help
 ```
 
-Start with `capabilities`, `router_info`, and `list_devices`. Example requests:
+The optional [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/blob/main/clients/cli/README.md)
+can list tools or call read-only tools without a desktop MCP client. It requires
+Node.js 22.19+ and pnpm:
 
-- “Rename the device with MAC address … to office-printer.”
-- “Block internet access for 192.168.178.25.”
-- “Open the router UI and inspect the configured DNS servers.”
+```sh
+pnpm dlx @modelcontextprotocol/inspector --cli --config mcp.json --server fritzbox --method tools/list
+pnpm dlx @modelcontextprotocol/inspector --cli --config mcp.json --server fritzbox --method tools/call --tool-name router_info
+pnpm dlx @modelcontextprotocol/inspector --cli --config mcp.json --server fritzbox --method tools/call --tool-name get_wan_dns
+```
+
+Tool listing does not contact the router. The two calls above require working
+credentials in the server entry or its launching environment.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Client reports `uv` or `fritzbox-mcp` not found | Use the absolute uv path in `mcp.json`; keep the `uv run` arguments and project directory correct. |
+| `fritz.box` does not resolve | Set `FRITZ_HOST` to the router's local IP and set `FRITZ_UI_URL` to the matching origin, such as `https://192.168.178.1`. |
+| TR-064 connection or service errors | Enable **Allow access for applications**, confirm the computer can reach the router, and check that the router exposes the requested service. |
+| Authentication fails or actions are unavailable | Check `FRITZ_USERNAME`, the password file path and contents, and the FRITZ!Box user's permissions. |
+| UI tools cannot find Chromium | Install Chromium with `PLAYWRIGHT_BROWSERS_PATH="$PWD/.browsers" uv run --no-dev --extra ui playwright install chromium`; use that exact absolute `.browsers` path in the client environment. |
+| Chromium reports missing libraries on Linux | Run Playwright's `install --with-deps chromium` command from setup, or install the OS packages listed in the Playwright browser guide. |
+| Works in a terminal, not in the MCP client | GUI clients may not inherit your shell environment. Put required variables in the server entry's `env`; `.env` files are not loaded automatically. |
+| Server process stays open without visible output | This is expected for a stdio server waiting for its MCP client. Check the MCP client's logs and connection status. |
 
 ## Operational and security notes
 
@@ -115,23 +196,6 @@ contain sensitive data. Device lists, network settings, and UI text are sent
 to the MCP client.
 
 ## Validation
-
-To check the MCP protocol with the
-[MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/blob/main/clients/cli/README.md),
-run from the project directory:
-
-```sh
-pnpm dlx @modelcontextprotocol/inspector --cli --config mcp.json --server fritzbox --method tools/list
-```
-
-Listing tools requires no credentials. For authenticated read checks, configure
-`FRITZ_USERNAME` and `FRITZ_PASSWORD_FILE` in the launching environment or the
-server entry's environment:
-
-```sh
-pnpm dlx @modelcontextprotocol/inspector --cli --config mcp.json --server fritzbox --method tools/call --tool-name router_info
-pnpm dlx @modelcontextprotocol/inspector --cli --config mcp.json --server fritzbox --method tools/call --tool-name get_wan_dns
-```
 
 Run the automated tests and lint checks with:
 

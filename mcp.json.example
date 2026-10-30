@@ -1,19 +1,22 @@
 {
   "mcpServers": {
     "fritzbox": {
-      "command": "uv",
+      "command": "/absolute/path/to/uv",
       "args": [
         "run",
         "--frozen",
         "--directory",
         "/absolute/path/to/fritzbox-mcp",
+        "--no-dev",
         "--extra",
         "ui",
         "fritzbox-mcp"
       ],
       "env": {
         "FRITZ_HOST": "fritz.box",
+        "FRITZ_USERNAME": "your-fritzbox-username",
         "FRITZ_PASSWORD_FILE": "/absolute/path/to/private/password",
+        "FRITZ_UI_URL": "https://fritz.box",
         "PLAYWRIGHT_BROWSERS_PATH": "/absolute/path/to/fritzbox-mcp/.browsers"
       }
     }
